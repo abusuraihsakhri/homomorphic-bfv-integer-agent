@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "homomorphic-bfv-integer-engine"
+version = "2.0.0"
+description = "BFV / BGV Exact Integer Homomorphic Encryption & Relinearization Engine"
+readme = "README.md"
+authors = [{ name = "Dr. Abu Suraih Sakhri", email = "abusuraih@example.com" }]
+license = { text = "MIT" }
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Topic :: Security/Cryptography",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+requires-python = ">=3.9"
+dependencies = []
+
+[project.scripts]
+homomorphic-bfv-integer-engine = "bfv_integer_agent.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/abusuraihsakhri/homomorphic-bfv-integer-engine"
+Repository = "https://github.com/abusuraihsakhri/homomorphic-bfv-integer-engine.git"

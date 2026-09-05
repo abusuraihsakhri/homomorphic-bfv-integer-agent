@@ -8,3 +8,7 @@ output.csv
 dist/
 build/
 *.egg-info/
+*.json
+!sample_payload.json
+!benchmark_dataset.json
+!openapi_spec.json

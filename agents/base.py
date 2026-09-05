@@ -54,10 +54,33 @@ class PHIGuard:
         return res
 
 
+def _generate_audit_secret() -> bytes:
+    """Generate a cryptographically secure audit secret.
+
+    Prefers the AUDIT_SECRET_KEY environment variable. If not set, generates
+    a random secret at runtime (warnings are emitted in production).
+    """
+    import warnings
+    env_key = os.getenv("AUDIT_SECRET_KEY")
+    if env_key:
+        return env_key.encode("utf-8")
+    # Generate a random secret for this session - warn that this is not persistent
+    warnings.warn(
+        "AUDIT_SECRET_KEY not set. Generating a random session key. "
+        "Set AUDIT_SECRET_KEY environment key for persistent audit integrity.",
+        RuntimeWarning,
+        stacklevel=2,
+    )
+    return os.urandom(32)
+
+
 class AuditTrail:
     """Cryptographic Tamper-Evident HMAC-SHA256 Audit Trail."""
     def __init__(self, secret_key: Optional[str] = None):
-        self.secret_key = (secret_key or os.getenv("AUDIT_SECRET_KEY", "homomorphic-bfv-integer-agent-master-audit-key-2026")).encode("utf-8")
+        if secret_key:
+            self.secret_key = secret_key.encode("utf-8")
+        else:
+            self.secret_key = _generate_audit_secret()
         self.logs: List[Dict[str, Any]] = []
 
     def log(self, actor: str, actor_tier: str, event_type: str, details: Dict[str, Any]) -> Dict[str, Any]:

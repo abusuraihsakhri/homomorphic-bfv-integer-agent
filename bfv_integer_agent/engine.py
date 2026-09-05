@@ -76,8 +76,14 @@ class Poly:
     def mod_down(self, new_q: int) -> "Poly":
         """Scale coefficients from q to new_q (rounding)."""
         q = self.q
-        new_coeffs = [round(c * new_q / q) % new_q for c in self.coeffs]
+        new_coeffs = [int(c * new_q / q + 0.5) % new_q for c in self.coeffs]
         return Poly(new_coeffs, new_q, self.N)
+
+    def scale(self, numerator: int, denominator: int) -> "Poly":
+        """Scale coefficients by numerator/denominator, keeping modulus q.
+        Used in BFV multiplication to scale by t/q."""
+        new_coeffs = [int(c * numerator / denominator + 0.5) for c in self.coeffs]
+        return Poly(new_coeffs, self.q, self.N)
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, Poly):
@@ -104,30 +110,38 @@ class Poly:
 # Error / key sampling
 # ---------------------------------------------------------------------------
 
-def sample_ternary(N: int, q: int, hamming_weight: Optional[int] = None) -> Poly:
+def sample_ternary(N: int, q: int, hamming_weight: Optional[int] = None,
+                   rng: Optional[random.Random] = None) -> Poly:
     """Sample a ternary polynomial with coefficients in {-1, 0, 1}."""
+    if rng is None:
+        rng = random
     if hamming_weight is None:
         hamming_weight = max(1, N // 3)
     coeffs = [0] * N
-    positions = random.sample(range(N), min(hamming_weight, N))
+    positions = rng.sample(range(N), min(hamming_weight, N))
     for p in positions:
-        coeffs[p] = random.choice([-1, 1])
+        coeffs[p] = rng.choice([-1, 1])
     return Poly(coeffs, q, N)
 
 
-def sample_error(N: int, q: int, eta: int = 1) -> Poly:
+def sample_error(N: int, q: int, eta: int = 1,
+                 rng: Optional[random.Random] = None) -> Poly:
     """Sample from centered binomial distribution with parameter eta."""
+    if rng is None:
+        rng = random
     coeffs = []
     for _ in range(N):
-        a = sum(random.randint(0, 1) for _ in range(eta))
-        b = sum(random.randint(0, 1) for _ in range(eta))
+        a = sum(rng.randint(0, 1) for _ in range(eta))
+        b = sum(rng.randint(0, 1) for _ in range(eta))
         coeffs.append(a - b)
     return Poly(coeffs, q, N)
 
 
-def sample_uniform(N: int, q: int) -> Poly:
+def sample_uniform(N: int, q: int, rng: Optional[random.Random] = None) -> Poly:
     """Sample a uniformly random polynomial in R_q."""
-    return Poly([random.randint(0, q - 1) for _ in range(N)], q, N)
+    if rng is None:
+        rng = random
+    return Poly([rng.randint(0, q - 1) for _ in range(N)], q, N)
 
 
 # ---------------------------------------------------------------------------
@@ -180,17 +194,21 @@ class BFVParams:
     def recommend(cls, plaintext_bits: int, num_adds: int = 0,
                   num_muls: int = 1) -> "BFVParams":
         """Recommend parameters based on desired operations."""
-        # Each multiplication consumes ~log2(t) noise bits
+        # Each multiplication consumes ~log2(t) + log2(N)/2 noise bits
         # Each addition consumes ~1 noise bit
-        needed_bits = num_muls * (plaintext_bits + 2) + num_adds + 20
-        # Pick N based on needed_bits
-        N = 64
-        while math.log2(N) * 10 < needed_bits:
-            N *= 2
-        q = 2 ** max(needed_bits + plaintext_bits, 20)
-        # Round q to nearest power of 2
-        q = 1 << int(math.ceil(math.log2(q)))
         t = 1 << plaintext_bits
+        # Pick N (ring dimension) - powers of 2
+        N = 128
+        # Estimate noise budget needed
+        # Initial noise budget ~ log2(q/t)
+        # Each mul costs ~ log2(t) + log2(N)/2 bits
+        noise_per_mul = plaintext_bits + math.log2(N) / 2
+        needed_noise = num_muls * noise_per_mul + num_adds + 10
+        # q/t must provide enough noise budget
+        # q/t = 2^needed_noise, so q = t * 2^needed_noise
+        q = t * (2 ** int(math.ceil(needed_noise)))
+        # Round q up to nearest power of 2 for efficiency
+        q = 1 << int(math.ceil(math.log2(q)))
         return cls(N=N, q=q, t=t, eta=1)
 
 
@@ -258,8 +276,7 @@ class BFVScheme:
 
     def __init__(self, params: BFVParams, seed: Optional[int] = None):
         self.params = params
-        if seed is not None:
-            random.seed(seed)
+        self._rng = random.Random(seed)
 
     # -- key generation ------------------------------------------------------
 
@@ -274,13 +291,14 @@ class BFVScheme:
         """
         p = self.params
         N, q = p.N, p.q
+        rng = self._rng
 
         # Secret key: ternary polynomial
-        sk = sample_ternary(N, q)
+        sk = sample_ternary(N, q, rng=rng)
 
         # Public key: pk = (-(a*sk + e), a)
-        a = sample_uniform(N, q)
-        e = sample_error(N, q, p.eta)
+        a = sample_uniform(N, q, rng=rng)
+        e = sample_error(N, q, p.eta, rng=rng)
         pk0 = (a * sk + e).scalar_mul(q - 1)  # -(a*sk + e) mod q
         pk = (pk0, a)
 
@@ -294,14 +312,14 @@ class BFVScheme:
         """Generate relinearization key for degree-2 → degree-1 reduction."""
         p = self.params
         N, q = p.N, p.q
-        delta = p.delta
+        rng = self._rng
 
         sk_sq = sk * sk
-        # Encrypt sk^2 under the public key, scaled by delta
-        u = sample_ternary(N, q)
-        e1 = sample_error(N, q, p.eta)
-        e2 = sample_error(N, q, p.eta)
-        rlk0 = pk[0] * u + e1 + sk_sq.scalar_mul(delta)
+        # Encrypt sk^2 under the public key, scaled by delta for correct relinearization
+        u = sample_ternary(N, q, rng=rng)
+        e1 = sample_error(N, q, p.eta, rng=rng)
+        e2 = sample_error(N, q, p.eta, rng=rng)
+        rlk0 = pk[0] * u + e1 + sk_sq.scalar_mul(p.delta)
         rlk1 = pk[1] * u + e2
         return (rlk0, rlk1)
 
@@ -318,15 +336,17 @@ class BFVScheme:
         p = self.params
         N, q, t, delta = p.N, p.q, p.t, p.delta
 
+        rng = self._rng
+
         # Encode message
         m_coeffs = [int(m) % t for m in message]
         m_poly = Poly(m_coeffs, q, N)
         m_scaled = m_poly.scalar_mul(delta)
 
         # Randomness
-        u = sample_ternary(N, q)
-        e1 = sample_error(N, q, p.eta)
-        e2 = sample_error(N, q, p.eta)
+        u = sample_ternary(N, q, rng=rng)
+        e1 = sample_error(N, q, p.eta, rng=rng)
+        e2 = sample_error(N, q, p.eta, rng=rng)
 
         # c0 = pk0*u + e1 + delta*m
         c0 = pk[0] * u + e1 + m_scaled
@@ -418,9 +438,9 @@ class BFVScheme:
         d2 = ct1.c1 * ct2.c1
 
         # Step 2: scale down by t/q (BFV's special step)
-        d0s = d0.scalar_mul(t).mod_down(q)
-        d1s = d1.scalar_mul(t).mod_down(q)
-        d2s = d2.scalar_mul(t).mod_down(q)
+        d0s = d0.scale(t, q)
+        d1s = d1.scale(t, q)
+        d2s = d2.scale(t, q)
 
         # Step 3: relinearize  (d0', d1') = (d0s + rlk0*d2s, d1s + rlk1*d2s)
         c0 = d0s + rlk[0] * d2s
@@ -541,3 +561,76 @@ def demo(preset: str = "toy", seed: int = 42) -> Dict[str, Any]:
         "noise_budget_sum": round(nb_sum, 2),
         "noise_budget_prod": round(nb_prod, 2),
     }
+
+
+# ---------------------------------------------------------------------------
+# Frontier Domain Engine - Analytical evaluation functions
+# ---------------------------------------------------------------------------
+
+class FrontierDomainEngine:
+    """Domain-specific analytical engine for evaluating task parameters.
+
+    Provides threshold-based evaluation of primary metrics, secondary kinetics,
+    and specification conformance for the BFV/BGV agent system.
+    """
+
+    PRIMARY_THRESHOLD = 25.0
+    SECONDARY_THRESHOLD = 12.0
+    DISCORDANCE_KEYWORDS = ["DISCORDANT", "ANOMALY", "MUTANT", "VIOLATION", "FAIL", "REJECT"]
+
+    @classmethod
+    def evaluate_primary_parameter(cls, primary_metric: float) -> Optional[Dict[str, Any]]:
+        """Evaluate primary metric against threshold.
+
+        Returns:
+            Alert dict with keys: summary, details, remediation
+            None if metric is within acceptable bounds.
+        """
+        if primary_metric > cls.PRIMARY_THRESHOLD:
+            return {
+                "summary": "Primary Metric Threshold Exceeded",
+                "details": (
+                    f"Primary measurement ({primary_metric:.2f}) exceeds upper reference "
+                    f"limit ({cls.PRIMARY_THRESHOLD:.2f}) under BFV / BGV Homomorphic Cryptography standards."
+                ),
+                "remediation": "Initiate recalibration workflow and review secondary parameters.",
+            }
+        return None
+
+    @classmethod
+    def evaluate_secondary_kinetics(cls, secondary_metric: float, is_critical_flag: bool) -> Optional[Dict[str, Any]]:
+        """Evaluate secondary metric and critical flag.
+
+        Returns:
+            Alert dict with keys: summary, details, remediation
+            None if metric is within acceptable bounds.
+        """
+        if is_critical_flag or secondary_metric > cls.SECONDARY_THRESHOLD:
+            return {
+                "summary": "Critical Safety Interlock Triggered",
+                "details": (
+                    f"CriticalFlag={is_critical_flag} with secondary index {secondary_metric:.2f}."
+                ),
+                "remediation": "Execute immediate closed-loop escalation and notify attending supervisor.",
+            }
+        return None
+
+    @classmethod
+    def audit_specification_conformance(cls, status_descriptor: str, attributes: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Audit status descriptor for specification conformance.
+
+        Returns:
+            Alert dict with keys: summary, details, remediation
+            None if descriptor indicates conformance.
+        """
+        desc_upper = str(status_descriptor).upper()
+        if any(keyword in desc_upper for keyword in cls.DISCORDANCE_KEYWORDS):
+            return {
+                "summary": "Protocol Conformance Discordance Detected",
+                "details": (
+                    f"Descriptor '{status_descriptor}' indicates discordance with "
+                    f"BFV / BGV Homomorphic Cryptography standards."
+                ),
+                "remediation": "Re-evaluate input specimen or rerun secondary confirmation assay.",
+            }
+        return None

@@ -420,8 +420,8 @@ class HomomorphicbfvintegeragentEnrichmentSuite:
         self.fhebootstrappingperf = FheBootstrappingPerformanceProfilerEngine()
         self.formalsecurityproofd = FormalSecurityProofDocumentationIndcpaIndcpadEngine()
         self.nistcompliancecertif = NistComplianceCertificationChecklistWithTestVectorValidationEngine()
-        self.additionalenhancemen = AdditionalEnhancementModulusSwitchingOptimizerEngine()
-        self.additionalenhancemen = AdditionalEnhancementRelinearizationKeyManagerEngine()
+        self.modulus_switching = AdditionalEnhancementModulusSwitchingOptimizerEngine()
+        self.relinearization_key = AdditionalEnhancementRelinearizationKeyManagerEngine()
 
     def execute_all(self, primary_val: float = 1.5, secondary_val: float = 0.5) -> Dict[str, Any]:
         results = {}
@@ -431,8 +431,8 @@ class HomomorphicbfvintegeragentEnrichmentSuite:
         results["FheBootstrappingPerformanceProfilerEngine"] = self.fhebootstrappingperf.evaluate(primary_val, secondary_val)
         results["FormalSecurityProofDocumentationIndcpaIndcpadEngine"] = self.formalsecurityproofd.evaluate(primary_val, secondary_val)
         results["NistComplianceCertificationChecklistWithTestVectorValidationEngine"] = self.nistcompliancecertif.evaluate(primary_val, secondary_val)
-        results["AdditionalEnhancementModulusSwitchingOptimizerEngine"] = self.additionalenhancemen.evaluate(primary_val, secondary_val)
-        results["AdditionalEnhancementRelinearizationKeyManagerEngine"] = self.additionalenhancemen.evaluate(primary_val, secondary_val)
+        results["AdditionalEnhancementModulusSwitchingOptimizerEngine"] = self.modulus_switching.evaluate(primary_val, secondary_val)
+        results["AdditionalEnhancementRelinearizationKeyManagerEngine"] = self.relinearization_key.evaluate(primary_val, secondary_val)
         return results
 
 # Global instance

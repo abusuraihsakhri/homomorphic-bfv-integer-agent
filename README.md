@@ -1,13 +1,12 @@
 # Homomorphic BFV Integer Agent
 
-> **Domain:** Post-Quantum Cryptography & Zero-Knowledge Architecture  
+> **Domain:** Post-Quantum Cryptography & Zero-Knowledge Architecture
 > **Reference Guidelines & Standards:** `NIST FIPS 203/204/205, NIST SP 800-90B & ISO/IEC Standards`
 
 <div align="center">
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 ![Python](https://img.shields.io/badge/Python-3.10%20%7C%203.11%20%7C%203.12-3776AB.svg?logo=python&logoColor=white)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.111-009688.svg?logo=fastapi&logoColor=white)
 ![Audit Trail](https://img.shields.io/badge/Audit-HMAC--SHA256_Tamper--Evident-brightgreen.svg)
 ![Zero-PHI Guard](https://img.shields.io/badge/Guard-Zero--PHI_Outbound-blue.svg)
 ![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg?logo=docker&logoColor=white)
@@ -18,62 +17,111 @@
 
 ## 📖 What It Does
 
-**Homomorphic BFV Integer Agent** is an advanced analytical and computational platform implementing BFV / BGV exact integer homomorphic encryption, relinearization & encrypted SQL queries.
+**Homomorphic BFV Integer Agent** is an educational and computational platform implementing BFV / BGV exact integer homomorphic encryption, relinearization & encrypted SQL queries.
+
+This project provides:
+- **BFV Homomorphic Encryption Engine**: Full implementation of the BFV scheme for exact integer arithmetic on encrypted data
+- **Multi-Agent Analysis System**: Distributed component workers for task evaluation and consensus
+- **PHI Protection**: Zero-PHI outbound interceptor for HIPAA compliance
+- **Cryptographic Audit Trail**: Tamper-evident HMAC-SHA256 chained logging
 
 ---
 
 ## ⚙️ Key Capabilities & Algorithmic Modules
 
-- **Deterministic Calculation Engine**: Strict compliance with standard reference formulations and thresholds.
-- **Risk & Urgency Classification**: Multi-tier categorization with automated clinical/operational action recommendations.
-- **Validation & Guardrails**: Rigorous input bounds checking and anomaly detection.
+### Homomorphic Encryption Engine
+- **Polynomial Arithmetic**: Negacyclic ring operations in Z_q[x]/(x^N + 1)
+- **Key Generation**: Secret key, public key, and relinearization key generation
+- **Encryption/Decryption**: Integer vector encoding with delta scaling
+- **Homomorphic Operations**: Addition and multiplication with noise budget tracking
+- **Parameter Selection**: Preset and recommended parameter sets
+
+### Security & Analysis
+- **Zero-PHI Outbound Interceptor**: AST and regex inspection blocking SSNs, MRNs, phone numbers, and patient identifiers
+- **Tamper-Evident HMAC-SHA256 Audit Trail**: Chained, cryptographically signed logs for every evaluation
+- **Multi-Agent Consensus**: Specialized workers for QC invariant checking, safety escalation, and protocol conformance
+
+---
+
+## 💻 Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/abusuraihsakhri/homomorphic-bfv-integer-agent.git
+cd homomorphic-bfv-integer-agent
+
+# Install dependencies (Python 3.9+ required)
+pip install -e .
+
+# Optional: Install web server dependencies
+pip install fastapi uvicorn pydantic pytest
+```
 
 ---
 
 ## 💻 CLI Quickstart & Usage
 
-### 1. Guided Interactive Mode
+### 1. Run the Full Demo
 ```bash
-python cli.py
+python cli.py demo --preset toy
 ```
 
-### 2. Direct Parameterized Evaluation
+### 2. Key Generation
 ```bash
-python cli.py --seed <value> --preset <value> --output <value> --keys <value>
+python cli.py keygen --preset toy -o bfv_keys.json
 ```
 
-### Parameter Reference
-- `--seed`: Specifies input measurement or parameter value.
-- `--preset`: Specifies input measurement or parameter value.
-- `--output`: Specifies input measurement or parameter value.
-- `--keys`: Specifies input measurement or parameter value.
-- `--ciphertext`: Specifies input measurement or parameter value.
-- `--verbose`: Specifies input measurement or parameter value.
-- `--ct1`: Specifies input measurement or parameter value.
-- `--ct2`: Specifies input measurement or parameter value.
-- `--recommend`: Specifies input measurement or parameter value.
-- `--plaintext-bits`: Specifies input measurement or parameter value.
+### 3. Encrypt / Decrypt
+```bash
+python cli.py encrypt "3,1,4,1,5" --keys bfv_keys.json -o ciphertext.json
+python cli.py decrypt --keys bfv_keys.json --ciphertext ciphertext.json
+```
 
-### Input Data Schema
+### 4. Homomorphic Operations
+```bash
+# Add two ciphertexts
+python cli.py add --keys bfv_keys.json --ct1 ct1.json --ct2 ct2.json -o sum.json
 
-| Field | Description | Requirement |
-|:------|:------------|:------------|
-| `task_id` | Parameter / observation metric | Required |
-| `target_identifier` | Parameter / observation metric | Required |
-| `primary_metric` | Parameter / observation metric | Required |
-| `secondary_metric` | Parameter / observation metric | Required |
-| `is_critical_flag` | Parameter / observation metric | Required |
-| `status_descriptor` | Parameter / observation metric | Required |
+# Multiply two ciphertexts
+python cli.py mul --keys bfv_keys.json --ct1 ct1.json --ct2 ct2.json -o product.json
+```
+
+### 5. Parameter Information
+```bash
+# Show preset parameters
+python cli.py params
+
+# Get recommended parameters for your use case
+python cli.py params --recommend --plaintext-bits 8 --num-muls 2
+```
+
+### Command Reference
+| Command | Description |
+|:--------|:------------|
+| `keygen` | Generate BFV key pair and evaluation keys |
+| `encrypt` | Encrypt integer message(s) |
+| `decrypt` | Decrypt a ciphertext |
+| `add` | Homomorphic addition of two ciphertexts |
+| `mul` | Homomorphic multiplication of two ciphertexts |
+| `demo` | Run a full end-to-end BFV demo |
+| `params` | Show or recommend BFV parameters |
 
 ---
 
-## 🛡️ Security & Enterprise Architecture
+## 🔐 Security Configuration
 
-* **Zero-PHI Outbound Interceptor:** Active AST and regex inspection blocking SSNs, MRNs, phone numbers, and patient identifiers.
-* **Tamper-Evident HMAC-SHA256 Audit Trail:** Chained, cryptographically signed logs for every evaluation and state transition.
-* **Air-Gapped LLM Reasoning Adapter:** Agnostic integration for local Ollama instances (`llama3`, `mistral`), Claude 3.5 Sonnet, GPT-4o, and deterministic test mocks.
-* **Active Learning Bayesian Calibration:** Dynamic tracker updating worker reliability weights and monitoring Brier calibration drift.
-* **FastAPI & Prometheus Telemetry:** Exposes OpenAPI 3.1 REST endpoints and operational Prometheus metrics (`/metrics`).
+### Audit Trail Key
+Set the `AUDIT_SECRET_KEY` environment variable for persistent audit integrity:
+
+```bash
+# Linux/macOS
+export AUDIT_SECRET_KEY="your-secure-random-key"
+
+# Windows
+set AUDIT_SECRET_KEY=your-secure-random-key
+```
+
+> **Note**: If not set, a random session key is generated (with a warning). This is suitable for development but not for production.
 
 ---
 
@@ -85,10 +133,16 @@ Run the automated test suite:
 pytest -v
 ```
 
+Run with coverage:
+
+```bash
+pytest -v --cov=bfv_integer_agent --cov=agents --cov=enrichment
+```
+
 Execute high-throughput batch simulation benchmarks:
 
 ```bash
-python simulator.py --tasks 1000 --concurrency 8
+python simulator.py 100
 ```
 
 ---
@@ -97,5 +151,44 @@ python simulator.py --tasks 1000 --concurrency 8
 
 ```bash
 docker build -t homomorphic-bfv-integer-agent .
-docker run -p 8000:8000 homomorphic-bfv-integer-agent
+docker run -p 8000:8000 -e AUDIT_SECRET_KEY=your-secure-key homomorphic-bfv-integer-agent
 ```
+
+---
+
+## 📁 Project Structure
+
+```
+homomorphic-bfv-integer-agent/
+├── bfv_integer_agent/        # Core BFV encryption engine
+│   ├── engine.py             # BFV scheme implementation
+│   ├── agents.py             # Multi-agent coordination
+│   ├── cli.py                # CLI for agent operations
+│   ├── models.py             # Data models
+│   └── server.py             # FastAPI REST server
+├── agents/                   # Analysis agent system
+│   ├── base.py               # PHI guard and audit trail
+│   ├── models.py             # Agent data models
+│   ├── supervisor.py         # Supervisor orchestrator
+│   ├── workers.py            # Specialized worker agents
+│   └── llm_factory.py        # LLM integration
+├── tests/                    # Test suite
+├── web/                      # Web interface
+├── cli.py                    # Main CLI entry point
+├── enrichment.py             # Enrichment feature modules
+├── simulator.py              # Batch simulation
+└── pyproject.toml            # Project configuration
+```
+
+---
+
+## ⚠️ Known Limitations
+
+- **BFV Multiplication**: Homomorphic multiplication with toy/small parameters may fail due to insufficient noise budget. Use `BFVParams.recommend()` for production use cases.
+- **Educational Use**: This implementation is for educational purposes and not recommended for production cryptographic applications without thorough security review.
+
+---
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

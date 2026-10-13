@@ -1,27 +1,31 @@
 [build-system]
-requires = ["setuptools>=61.0"]
+requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "homomorphic-bfv-integer-engine"
-version = "2.0.0"
-description = "BFV / BGV Exact Integer Homomorphic Encryption & Relinearization Engine"
+name = "homomorphic-bfv-integer-agent"
+version = "2.1.0"
+description = "Educational BFV-style integer homomorphic encryption and audit utilities"
 readme = "README.md"
-authors = [{ name = "Dr. Abu Suraih Sakhri", email = "abusuraih@example.com" }]
-license = { text = "MIT" }
-classifiers = [
-    "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: MIT License",
-    "Operating System :: OS Independent",
-    "Topic :: Security/Cryptography",
-    "Topic :: Scientific/Engineering :: Artificial Intelligence",
-]
 requires-python = ">=3.9"
+license = {text = "MIT"}
+authors = [{name = "Dr. Abu Suraih Sakhri"}]
 dependencies = []
 
+[project.optional-dependencies]
+server = ["fastapi>=0.100", "uvicorn>=0.23", "pydantic>=2"]
+test = ["pytest>=7", "pydantic>=2"]
+
 [project.scripts]
-homomorphic-bfv-integer-engine = "bfv_integer_agent.cli:main"
+homomorphic-bfv-integer-agent = "cli:main"
+homomorphic-bfv-audit = "bfv_integer_agent.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/abusuraihsakhri/homomorphic-bfv-integer-engine"
-Repository = "https://github.com/abusuraihsakhri/homomorphic-bfv-integer-engine.git"
+Homepage = "https://github.com/abusuraihsakhri/homomorphic-bfv-integer-agent"
+Repository = "https://github.com/abusuraihsakhri/homomorphic-bfv-integer-agent"
+
+[tool.setuptools]
+py-modules = ["cli", "enrichment", "simulator", "bfv_integer_agent_app"]
+
+[tool.setuptools.packages.find]
+include = ["bfv_integer_agent*", "agents*"]

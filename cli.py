@@ -31,7 +31,9 @@ def cmd_keygen(args):
 
     serialized = scheme.serialize_keys(sk, pk, rlk)
     out_path = args.output or "bfv_keys.json"
-    with open(out_path, "w") as f:
+    # Never silently overwrite or create world-readable secret-key files.
+    fd = os.open(out_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
         f.write(serialized)
 
     print(f"BFV Key Generation Complete")
@@ -50,6 +52,8 @@ def cmd_encrypt(args):
 
     # Parse message
     message = [int(x) for x in args.message.split(",")]
+    if len(message) > params.N:
+        raise ValueError(f"Message has {len(message)} coefficients; maximum is {params.N}")
     # Pad to N
     message += [0] * (params.N - len(message))
 

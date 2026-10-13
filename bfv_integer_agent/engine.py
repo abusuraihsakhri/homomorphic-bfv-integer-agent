@@ -155,7 +155,7 @@ class BFVParams:
     BFV scheme parameters.
 
     Attributes:
-        N:   Ring dimension (power of 2).  Security ~ N bits.
+        N:   Ring dimension (power of 2), not a security-bit rating.
         q:   Ciphertext modulus.  Larger q → more noise budget but less security.
         t:   Plaintext modulus.   Messages live in Z_t.
         eta: Error distribution parameter (centered binomial).

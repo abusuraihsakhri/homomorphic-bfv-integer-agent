@@ -344,7 +344,6 @@ class TestHomomorphicAddition:
 
 class TestHomomorphicMultiplication:
 
-    @pytest.mark.xfail(reason="BFV multiplication noise budget limited with toy parameters", strict=False)
     def test_mul_two_ciphertexts(self):
         # Toy parameters support multiplication with single-slot encryption
         params = BFVParams.from_preset("toy")
@@ -357,7 +356,6 @@ class TestHomomorphicMultiplication:
         dec = scheme.decrypt(ct_prod, sk)
         assert dec[0] == 15  # 3*5 mod 16
 
-    @pytest.mark.xfail(reason="BFV multiplication noise budget limited with small parameters", strict=False)
     def test_mul_with_modular_wrap(self):
         # Use parameters with sufficient noise budget for multiplication
         params = BFVParams.from_preset("small")
@@ -370,7 +368,6 @@ class TestHomomorphicMultiplication:
         dec = scheme.decrypt(ct_prod, sk)
         assert dec[0] == 12  # 3*4 mod 256
 
-    @pytest.mark.xfail(reason="BFV multiplication noise budget limited with small parameters", strict=False)
     def test_mul_by_one(self):
         # Use parameters with sufficient noise budget for multiplication
         params = BFVParams.from_preset("small")
@@ -383,7 +380,6 @@ class TestHomomorphicMultiplication:
         dec = scheme.decrypt(ct_prod, sk)
         assert dec[0] == 5
 
-    @pytest.mark.xfail(reason="BFV multiplication noise budget limited with toy parameters", strict=False)
     def test_mul_by_zero(self):
         # Toy parameters support multiplication with single-slot encryption
         params = BFVParams.from_preset("toy")
@@ -496,7 +492,6 @@ class TestDemo:
         results = demo(preset="toy", seed=42)
         assert results["add_expected"] == results["add_decrypted"]
 
-    @pytest.mark.xfail(reason="BFV multiplication noise budget limited with toy parameters", strict=False)
     def test_demo_multiplication_correct(self):
         # Demo with preset parameters may not have enough noise budget for
         # multiplication with multiple non-zero slots. Verify multiplication

@@ -1,194 +1,93 @@
 # Homomorphic BFV Integer Agent
 
-> **Domain:** Post-Quantum Cryptography & Zero-Knowledge Architecture
-> **Reference Guidelines & Standards:** `NIST FIPS 203/204/205, NIST SP 800-90B & ISO/IEC Standards`
+An educational, pure-Python implementation of **BFV-style encrypted integer polynomial arithmetic**. The core engine supports key generation, encryption/decryption, homomorphic addition, multiplication with gadget-decomposed relinearization, and noise diagnostics. A separate synthetic telemetry API demonstrates an agent audit workflow.
 
-<div align="center">
+**Security notice:** This is a research and teaching implementation, not a hardened encryption library. The preset ring dimensions are small, parameter recommendations are heuristic, Python arithmetic is not constant-time, and the code has not been independently security assessed. **Do not use this code to protect real secrets, medical records, or patient data.** The audit API is not a validated clinical or standards-compliance system.
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-![Python](https://img.shields.io/badge/Python-3.10%20%7C%203.11%20%7C%203.12-3776AB.svg?logo=python&logoColor=white)
-![Audit Trail](https://img.shields.io/badge/Audit-HMAC--SHA256_Tamper--Evident-brightgreen.svg)
-![Zero-PHI Guard](https://img.shields.io/badge/Guard-Zero--PHI_Outbound-blue.svg)
-![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg?logo=docker&logoColor=white)
+## Browser demonstration
 
-</div>
+The `web/` directory contains a browser UI that runs the **same Python encryption engine** locally using [Pyodide](https://pyodide.org/). It supports integer vectors, encryption/decryption, addition, and negacyclic polynomial multiplication correctness checks. GitHub Actions includes a Pages publishing workflow; a live site requires Pages to be enabled for the repository.
 
----
-
-## 📖 What It Does
-
-**Homomorphic BFV Integer Agent** is an educational and computational platform implementing BFV / BGV exact integer homomorphic encryption, relinearization & encrypted SQL queries.
-
-This project provides:
-- **BFV Homomorphic Encryption Engine**: Full implementation of the BFV scheme for exact integer arithmetic on encrypted data
-- **Multi-Agent Analysis System**: Distributed component workers for task evaluation and consensus
-- **PHI Protection**: Zero-PHI outbound interceptor for HIPAA compliance
-- **Cryptographic Audit Trail**: Tamper-evident HMAC-SHA256 chained logging
-
----
-
-## ⚙️ Key Capabilities & Algorithmic Modules
-
-### Homomorphic Encryption Engine
-- **Polynomial Arithmetic**: Negacyclic ring operations in Z_q[x]/(x^N + 1)
-- **Key Generation**: Secret key, public key, and relinearization key generation
-- **Encryption/Decryption**: Integer vector encoding with delta scaling
-- **Homomorphic Operations**: Addition and multiplication with noise budget tracking
-- **Parameter Selection**: Preset and recommended parameter sets
-
-### Security & Analysis
-- **Zero-PHI Outbound Interceptor**: AST and regex inspection blocking SSNs, MRNs, phone numbers, and patient identifiers
-- **Tamper-Evident HMAC-SHA256 Audit Trail**: Chained, cryptographically signed logs for every evaluation
-- **Multi-Agent Consensus**: Specialized workers for QC invariant checking, safety escalation, and protocol conformance
-
----
-
-## 💻 Installation
+For local preview (requires a network connection to load Pyodide assets):
 
 ```bash
-# Clone the repository
+mkdir -p /tmp/bfv-site
+cp web/index.html web/app.js web/style.css /tmp/bfv-site/
+cp bfv_integer_agent/engine.py /tmp/bfv-site/bfv_engine.py
+python -m http.server 8080 --directory /tmp/bfv-site
+```
+
+Open <http://localhost:8080/>. Browser assets load from jsDelivr. The application does not submit input vectors or keys to an application server; do not enter sensitive data.
+
+## Installation and CLI
+
+Requires Python 3.9 or newer. The BFV core uses the Python standard library.
+
+```bash
 git clone https://github.com/abusuraihsakhri/homomorphic-bfv-integer-agent.git
 cd homomorphic-bfv-integer-agent
-
-# Install dependencies (Python 3.9+ required)
-pip install -e .
-
-# Optional: Install web server dependencies
-pip install fastapi uvicorn pydantic pytest
+python -m pip install -e .
+homomorphic-bfv-integer-agent demo --preset toy
+homomorphic-bfv-integer-agent params
 ```
 
----
-
-## 💻 CLI Quickstart & Usage
-
-### 1. Run the Full Demo
-```bash
-python cli.py demo --preset toy
-```
-
-### 2. Key Generation
-```bash
-python cli.py keygen --preset toy -o bfv_keys.json
-```
-
-### 3. Encrypt / Decrypt
-```bash
-python cli.py encrypt "3,1,4,1,5" --keys bfv_keys.json -o ciphertext.json
-python cli.py decrypt --keys bfv_keys.json --ciphertext ciphertext.json
-```
-
-### 4. Homomorphic Operations
-```bash
-# Add two ciphertexts
-python cli.py add --keys bfv_keys.json --ct1 ct1.json --ct2 ct2.json -o sum.json
-
-# Multiply two ciphertexts
-python cli.py mul --keys bfv_keys.json --ct1 ct1.json --ct2 ct2.json -o product.json
-```
-
-### 5. Parameter Information
-```bash
-# Show preset parameters
-python cli.py params
-
-# Get recommended parameters for your use case
-python cli.py params --recommend --plaintext-bits 8 --num-muls 2
-```
-
-### Command Reference
-| Command | Description |
-|:--------|:------------|
-| `keygen` | Generate BFV key pair and evaluation keys |
-| `encrypt` | Encrypt integer message(s) |
-| `decrypt` | Decrypt a ciphertext |
-| `add` | Homomorphic addition of two ciphertexts |
-| `mul` | Homomorphic multiplication of two ciphertexts |
-| `demo` | Run a full end-to-end BFV demo |
-| `params` | Show or recommend BFV parameters |
-
----
-
-## 🔐 Security Configuration
-
-### Audit Trail Key
-Set the `AUDIT_SECRET_KEY` environment variable for persistent audit integrity:
+Generate keys and execute a round trip:
 
 ```bash
-# Linux/macOS
-export AUDIT_SECRET_KEY="your-secure-random-key"
-
-# Windows
-set AUDIT_SECRET_KEY=your-secure-random-key
+homomorphic-bfv-integer-agent keygen --preset toy --output bfv_keys.json
+homomorphic-bfv-integer-agent encrypt "3,1,4,1,5" --keys bfv_keys.json --output ct.json
+homomorphic-bfv-integer-agent decrypt --keys bfv_keys.json --ciphertext ct.json
 ```
 
-> **Note**: If not set, a random session key is generated (with a warning). This is suitable for development but not for production.
+Generate two ciphertexts with the same keys to use `add --ct1 ... --ct2 ...` or `mul --ct1 ... --ct2 ...`. Multiplication is **negacyclic polynomial convolution modulo t** in the ring \(\mathbb{Z}_t[x]/(x^N+1)\), not element-wise vector multiplication. Old serialized keys remain usable for decrypt/add, but **must be regenerated for multiplication** because the relinearization-key format changed.
 
----
+Key generation creates owner-only secret-key files on Unix-like systems and refuses to overwrite existing files. The global `--seed` option permits reproducible demonstrations; **do not treat seeded keys as secure**.
 
-## 🧪 Testing & Verification
+## Synthetic audit API
 
-Run the automated test suite:
+The separate synthetic-audit CLI is `homomorphic-bfv-audit`. For the FastAPI service:
 
 ```bash
-pytest -v
+python -m pip install -e ".[server]"
+python -m uvicorn agents.api:app --host 127.0.0.1 --port 8000
 ```
 
-Run with coverage:
+API documentation: <http://127.0.0.1:8000/docs>. Routes include `/health`, `/metrics`, `/api/audit`, `/api/chat`, and `/api/audit/logs`. The audit API uses arbitrary, **synthetic numerical thresholds**: it does not inspect BFV ciphertext integrity, establish conformance, or make medical decisions. Chat uses a **local placeholder**; remote model providers are not implemented.
+
+Audit entries are signed with HMAC-SHA256 and verified against the expected signature and predecessor. **Logs are process-local and not durable.** Set `AUDIT_SECRET_KEY` to a strong random value for a configured installation. The pattern-based identifier filter is incomplete and **does not establish HIPAA compliance**.
+
+## Docker
+
+Docker runs the synthetic API, not the browser demo. Docker Compose binds to loopback:
 
 ```bash
-pytest -v --cov=bfv_integer_agent --cov=agents --cov=enrichment
+export AUDIT_SECRET_KEY="$(python -c 'import secrets; print(secrets.token_hex(32))')"
+docker compose up --build
 ```
 
-Execute high-throughput batch simulation benchmarks:
+Do not expose audit routes to untrusted networks without authentication, rate limits, and a deployment security review.
+
+## Tests and development
 
 ```bash
-python simulator.py 100
+python -m pip install -e ".[server,test]"
+python -m pip check
+python -m compileall -q agents bfv_integer_agent cli.py enrichment.py simulator.py
+python -m pytest -q
+node --check web/app.js
 ```
 
----
+CI runs Python 3.10–3.12 with correctness and audit-chain tests. The browser requires WebAssembly, JavaScript, and CDN access; first load can be slow. Modules in `enrichment.py` are generic demonstrators, **not** certified cryptographic validators.
 
-## 🐳 Container Deployment
+## Project layout
 
-```bash
-docker build -t homomorphic-bfv-integer-agent .
-docker run -p 8000:8000 -e AUDIT_SECRET_KEY=your-secure-key homomorphic-bfv-integer-agent
-```
+- `bfv_integer_agent/engine.py` — reference BFV-style polynomial engine
+- `cli.py` — encryption CLI
+- `bfv_integer_agent/cli.py` — synthetic audit CLI
+- `agents/` — audit workers, logging and FastAPI
+- `web/` — browser UI running Python through Pyodide
+- `tests/` — unit and regression tests
 
----
+## License
 
-## 📁 Project Structure
-
-```
-homomorphic-bfv-integer-agent/
-├── bfv_integer_agent/        # Core BFV encryption engine
-│   ├── engine.py             # BFV scheme implementation
-│   ├── agents.py             # Multi-agent coordination
-│   ├── cli.py                # CLI for agent operations
-│   ├── models.py             # Data models
-│   └── server.py             # FastAPI REST server
-├── agents/                   # Analysis agent system
-│   ├── base.py               # PHI guard and audit trail
-│   ├── models.py             # Agent data models
-│   ├── supervisor.py         # Supervisor orchestrator
-│   ├── workers.py            # Specialized worker agents
-│   └── llm_factory.py        # LLM integration
-├── tests/                    # Test suite
-├── web/                      # Web interface
-├── cli.py                    # Main CLI entry point
-├── enrichment.py             # Enrichment feature modules
-├── simulator.py              # Batch simulation
-└── pyproject.toml            # Project configuration
-```
-
----
-
-## ⚠️ Known Limitations
-
-- **BFV Multiplication**: Homomorphic multiplication with toy/small parameters may fail due to insufficient noise budget. Use `BFVParams.recommend()` for production use cases.
-- **Educational Use**: This implementation is for educational purposes and not recommended for production cryptographic applications without thorough security review.
-
----
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+[MIT](LICENSE).

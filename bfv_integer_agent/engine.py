@@ -13,7 +13,6 @@ Key operations:
 """
 import math
 import random
-import hashlib
 import json
 from typing import List, Tuple, Optional, Dict, Any
 
@@ -30,8 +29,11 @@ class Poly:
     def __init__(self, coeffs: List[int], q: int, N: int):
         self.q = q
         self.N = N
-        # Pad or truncate to N coefficients, reduce mod q
-        c = list(coeffs[:N])
+        if N <= 0 or q <= 1:
+            raise ValueError("Invalid polynomial dimension or modulus")
+        if len(coeffs) > N:
+            raise ValueError("Too many coefficients for ring dimension")
+        c = list(coeffs)
         while len(c) < N:
             c.append(0)
         self.coeffs = [x % q for x in c]
@@ -153,24 +155,27 @@ class BFVParams:
     BFV scheme parameters.
 
     Attributes:
-        N:   Ring dimension (power of 2).  Security ~ N bits.
+        N:   Ring dimension (power of 2), not a security-bit rating.
         q:   Ciphertext modulus.  Larger q → more noise budget but less security.
         t:   Plaintext modulus.   Messages live in Z_t.
         eta: Error distribution parameter (centered binomial).
     """
 
     # Pre-defined parameter sets (educational / toy sizes)
-    TOY = {"N": 16, "q": 1024, "t": 16, "eta": 1}
-    SMALL = {"N": 64, "q": 65536, "t": 256, "eta": 1}
-    MEDIUM = {"N": 256, "q": 2**20, "t": 1024, "eta": 2}
+    # Educational, non-security-rated presets with room for multiplication.
+    TOY = {"N": 16, "q": 2**20, "t": 16, "eta": 1}
+    SMALL = {"N": 64, "q": 2**30, "t": 256, "eta": 1}
+    MEDIUM = {"N": 256, "q": 2**40, "t": 1024, "eta": 2}
 
     def __init__(self, N: int, q: int, t: int, eta: int = 1):
-        if N & (N - 1) != 0:
+        if N < 2 or N & (N - 1) != 0:
             raise ValueError(f"N must be a power of 2, got {N}")
         if q <= t:
             raise ValueError(f"q ({q}) must be > t ({t})")
         if t < 2:
             raise ValueError(f"t ({t}) must be >= 2")
+        if eta < 1:
+            raise ValueError("eta must be >= 1")
         self.N = N
         self.q = q
         self.t = t
@@ -194,6 +199,8 @@ class BFVParams:
     def recommend(cls, plaintext_bits: int, num_adds: int = 0,
                   num_muls: int = 1) -> "BFVParams":
         """Recommend parameters based on desired operations."""
+        if not (1 <= plaintext_bits <= 16 and 0 <= num_adds <= 100 and 0 <= num_muls <= 4):
+            raise ValueError("Unsupported educational parameter request")
         # Each multiplication consumes ~log2(t) + log2(N)/2 noise bits
         # Each addition consumes ~1 noise bit
         t = 1 << plaintext_bits
@@ -249,6 +256,8 @@ class BFVCiphertext:
         c0 = Poly.from_json(data["c0"])
         c1 = Poly.from_json(data["c1"])
         c2 = Poly.from_json(data["c2"]) if "c2" in data else None
+        if any(poly.q != params.q or poly.N != params.N for poly in [c0, c1] + ([c2] if c2 else [])):
+            raise ValueError("Ciphertext parameters do not match selected keys")
         ct = cls(c0, c1, params, c2=c2, noise_budget=data.get("noise_budget", 0))
         return ct
 
@@ -276,7 +285,8 @@ class BFVScheme:
 
     def __init__(self, params: BFVParams, seed: Optional[int] = None):
         self.params = params
-        self._rng = random.Random(seed)
+        # Seeded randomness is reproducible, not cryptographically secure.
+        self._rng = random.SystemRandom() if seed is None else random.Random(seed)
 
     # -- key generation ------------------------------------------------------
 
@@ -308,20 +318,20 @@ class BFVScheme:
         return sk, pk, rlk
 
     def _gen_relin_key(self, sk: Poly,
-                       pk: Tuple[Poly, Poly]) -> Tuple[Poly, Poly]:
-        """Generate relinearization key for degree-2 → degree-1 reduction."""
+                       pk: Tuple[Poly, Poly]) -> Tuple[List[Poly], List[Poly]]:
+        """Encrypt gadget multiples of sk² for degree-2 to degree-1 switching."""
         p = self.params
-        N, q = p.N, p.q
-        rng = self._rng
-
+        base = 256
+        digits = (p.q.bit_length() + 7) // 8
         sk_sq = sk * sk
-        # Encrypt sk^2 under the public key, scaled by delta for correct relinearization
-        u = sample_ternary(N, q, rng=rng)
-        e1 = sample_error(N, q, p.eta, rng=rng)
-        e2 = sample_error(N, q, p.eta, rng=rng)
-        rlk0 = pk[0] * u + e1 + sk_sq.scalar_mul(p.delta)
-        rlk1 = pk[1] * u + e2
-        return (rlk0, rlk1)
+        left: List[Poly] = []
+        right: List[Poly] = []
+        for j in range(digits):
+            a = sample_uniform(p.N, p.q, rng=self._rng)
+            e = sample_error(p.N, p.q, p.eta, rng=self._rng)
+            left.append(sk_sq.scalar_mul(base ** j) - (a * sk) - e)
+            right.append(a)
+        return left, right
 
     # -- encryption ----------------------------------------------------------
 
@@ -339,6 +349,8 @@ class BFVScheme:
         rng = self._rng
 
         # Encode message
+        if len(message) > N:
+            raise ValueError(f"Message length {len(message)} exceeds ring dimension {N}")
         m_coeffs = [int(m) % t for m in message]
         m_poly = Poly(m_coeffs, q, N)
         m_scaled = m_poly.scalar_mul(delta)
@@ -370,13 +382,16 @@ class BFVScheme:
         p = self.params
         N, q, t = p.N, p.q, p.t
 
+        self._check_ciphertext(ct)
+        if sk.N != N or sk.q != q:
+            raise ValueError("Secret key parameters do not match scheme")
         if ct.degree == 1:
             v = ct.c0 + ct.c1 * sk
             divisor = q
         else:
             sk_sq = sk * sk
             v = ct.c0 + ct.c1 * sk + ct.c2 * sk_sq
-            divisor = q * q
+            divisor = q
 
         message = []
         for coeff in v.coeffs:
@@ -391,6 +406,8 @@ class BFVScheme:
     def add(self, ct1: BFVCiphertext, ct2: BFVCiphertext) -> BFVCiphertext:
         """Homomorphic addition of two ciphertexts."""
         p = self.params
+        self._check_ciphertext(ct1)
+        self._check_ciphertext(ct2)
         if ct1.degree == 1 and ct2.degree == 1:
             c0 = ct1.c0 + ct2.c0
             c1 = ct1.c1 + ct2.c1
@@ -415,45 +432,75 @@ class BFVScheme:
         p = self.params
         m_poly = Poly([m % p.t for m in message], p.q, p.N)
         m_scaled = m_poly.scalar_mul(p.delta)
+        self._check_ciphertext(ct)
         c0 = ct.c0 + m_scaled
         return BFVCiphertext(c0, ct.c1, p, noise_budget=ct.noise_budget)
 
     # -- homomorphic multiplication ------------------------------------------
 
     def mul(self, ct1: BFVCiphertext, ct2: BFVCiphertext,
-            rlk: Tuple[Poly, Poly]) -> BFVCiphertext:
-        """
-        Homomorphic multiplication with relinearization.
+            rlk: Tuple[List[Poly], List[Poly]]) -> BFVCiphertext:
+        """Scale integer tensor products, then relinearize using gadget digits.
 
-        1. Compute degree-2 ciphertext (d0, d1, d2).
-        2. Scale down by t/q to manage noise growth.
-        3. Relinearize back to degree-1 using the evaluation key.
+        Multiplying already reduced mod-q products loses information.
+        This is a reference teaching implementation, not production BFV.
         """
         p = self.params
-        N, q, t = p.N, p.q, p.t
+        self._check_ciphertext(ct1)
+        self._check_ciphertext(ct2)
+        if ct1.degree != 1 or ct2.degree != 1:
+            raise ValueError("Only degree-one inputs are supported")
+        if (len(rlk) != 2 or not isinstance(rlk[0], list)
+                or not isinstance(rlk[1], list) or len(rlk[0]) != len(rlk[1])
+                or len(rlk[0]) != (p.q.bit_length() + 7) // 8):
+            raise ValueError("Incompatible legacy relinearization key; regenerate keys")
 
-        # Step 1: tensor product
-        d0 = ct1.c0 * ct2.c0
-        d1 = ct1.c0 * ct2.c1 + ct1.c1 * ct2.c0
-        d2 = ct1.c1 * ct2.c1
+        def centered(poly: Poly) -> List[int]:
+            return [x if x <= p.q // 2 else x - p.q for x in poly.coeffs]
 
-        # Step 2: scale down by t/q (BFV's special step)
-        d0s = d0.scale(t, q)
-        d1s = d1.scale(t, q)
-        d2s = d2.scale(t, q)
+        def convolution(a: List[int], b: List[int]) -> List[int]:
+            result = [0] * p.N
+            for i, ai in enumerate(a):
+                for j, bj in enumerate(b):
+                    k = i + j
+                    result[k % p.N] += ai * bj if k < p.N else -ai * bj
+            return result
 
-        # Step 3: relinearize  (d0', d1') = (d0s + rlk0*d2s, d1s + rlk1*d2s)
-        c0 = d0s + rlk[0] * d2s
-        c1 = d1s + rlk[1] * d2s
+        def scaled(values: List[int]) -> Poly:
+            def rounded(value: int) -> int:
+                numerator = abs(value) * p.t
+                v = (numerator + p.q // 2) // p.q
+                return v if value >= 0 else -v
+            return Poly([rounded(value) for value in values], p.q, p.N)
 
-        # Noise budget: each mul costs ~log2(t) + log2(N) bits
-        noise = min(ct1.noise_budget, ct2.noise_budget) - math.log2(t) - math.log2(N) / 2
+        a0, a1 = centered(ct1.c0), centered(ct1.c1)
+        b0, b1 = centered(ct2.c0), centered(ct2.c1)
+        d0 = scaled(convolution(a0, b0))
+        d1 = scaled([u + v for u, v in zip(convolution(a0, b1), convolution(a1, b0))])
+        d2 = scaled(convolution(a1, b1))
+        c0, c1 = d0, d1
+        base = 256
+        for j, (key0, key1) in enumerate(zip(rlk[0], rlk[1])):
+            if key0.N != p.N or key0.q != p.q or key1.N != p.N or key1.q != p.q:
+                raise ValueError("Relinearization key parameters do not match scheme")
+            digit_poly = Poly([(v // (base ** j)) % base for v in d2.coeffs], p.q, p.N)
+            c0 = c0 + digit_poly * key0
+            c1 = c1 + digit_poly * key1
 
+        noise = min(ct1.noise_budget, ct2.noise_budget) - math.log2(p.t) - math.log2(p.N) / 2
         return BFVCiphertext(c0, c1, p, noise_budget=noise)
+
+    def _check_ciphertext(self, ct: BFVCiphertext) -> None:
+        if (ct.c0.q != self.params.q or ct.c1.q != self.params.q
+                or ct.c0.N != self.params.N or ct.c1.N != self.params.N
+                or ct.params.N != self.params.N or ct.params.q != self.params.q
+                or ct.params.t != self.params.t):
+            raise ValueError("Ciphertext parameters do not match scheme")
 
     def mul_plain(self, ct: BFVCiphertext, message: List[int]) -> BFVCiphertext:
         """Multiply ciphertext by a plaintext polynomial."""
         p = self.params
+        self._check_ciphertext(ct)
         m_poly = Poly([m % p.t for m in message], p.q, p.N)
         c0 = ct.c0 * m_poly
         c1 = ct.c1 * m_poly
@@ -472,6 +519,7 @@ class BFVScheme:
         p = self.params
         N, q, t, delta = p.N, p.q, p.t, p.delta
 
+        self._check_ciphertext(ct)
         v = ct.c0 + ct.c1 * sk
         max_noise = 0
         for coeff in v.coeffs:
@@ -493,7 +541,7 @@ class BFVScheme:
         data = {
             "sk": sk.to_json(),
             "pk": [pk[0].to_json(), pk[1].to_json()],
-            "rlk": [rlk[0].to_json(), rlk[1].to_json()],
+            "rlk": [[p.to_json() for p in rlk[0]], [p.to_json() for p in rlk[1]]],
             "params": {"N": self.params.N, "q": self.params.q,
                        "t": self.params.t, "eta": self.params.eta},
         }
@@ -508,7 +556,12 @@ class BFVScheme:
         params = BFVParams(**data["params"])
         sk = Poly.from_json(data["sk"])
         pk = (Poly.from_json(data["pk"][0]), Poly.from_json(data["pk"][1]))
-        rlk = (Poly.from_json(data["rlk"][0]), Poly.from_json(data["rlk"][1]))
+        if isinstance(data["rlk"][0], list):
+            rlk = ([Poly.from_json(p) for p in data["rlk"][0]],
+                   [Poly.from_json(p) for p in data["rlk"][1]])
+        else:
+            # Legacy keys remain readable for decrypt/add, not multiplication.
+            rlk = (Poly.from_json(data["rlk"][0]), Poly.from_json(data["rlk"][1]))
         return sk, pk, rlk, params
 
 
@@ -555,7 +608,7 @@ def demo(preset: str = "toy", seed: int = 42) -> Dict[str, Any]:
         "dec_m2": dec2[:5],
         "add_expected": [(a + b) % params.t for a, b in zip(m1[:5], m2[:5])],
         "add_decrypted": dec_sum[:5],
-        "mul_expected": [(a * b) % params.t for a, b in zip(m1[:5], m2[:5])],
+        "mul_expected": (Poly(m1, params.t, params.N) * Poly(m2, params.t, params.N)).coeffs[:5],
         "mul_decrypted": dec_prod[:5],
         "noise_budget_ct1": round(nb1, 2),
         "noise_budget_sum": round(nb_sum, 2),

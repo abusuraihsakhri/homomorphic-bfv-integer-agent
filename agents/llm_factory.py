@@ -11,7 +11,7 @@ class MockLLM:
 
     def invoke(self, prompt: str) -> str:
         PHIGuard.assert_no_phi(prompt)
-        return f"[{self.system_name} Deterministic Verification Engine]: Clinical & scientific analysis verified for query: '{prompt[:60]}...'. Parameters evaluated under NIST FIPS 203/204/205 / ISO/IEC 17825 Standards."
+        return f"[{self.system_name} local mock]: Input received: '{prompt[:60]}...'. This is a placeholder, not a scientific verification."
 
 
 class LLMFactory:
@@ -22,10 +22,4 @@ class LLMFactory:
         prov = str(provider).lower()
         if prov in ["mock", "deterministic", "test"]:
             return MockLLM(system_name)
-        elif prov in ["ollama", "local"]:
-            return MockLLM(system_name)
-        elif prov in ["claude", "anthropic"]:
-            return MockLLM(system_name)
-        elif prov in ["openai", "gpt4"]:
-            return MockLLM(system_name)
-        return MockLLM(system_name)
+        raise ValueError(f"Provider '{provider}' is not implemented; only the local mock is available.")

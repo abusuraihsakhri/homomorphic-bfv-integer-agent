@@ -10,6 +10,15 @@ from .agents import BFVCoordinator
 
 coordinator = BFVCoordinator()
 
+def parse_bool(value):
+    """Parse CSV booleans without treating the string 'False' as true."""
+    text = str(value).strip().lower()
+    if text in ("", "false", "0", "no", "n"):
+        return False
+    if text in ("true", "1", "yes", "y"):
+        return True
+    raise ValueError(f"Invalid is_critical_flag: {value!r}")
+
 
 def main(argv=None):
     parser = argparse.ArgumentParser(prog="homomorphic-bfv-integer-agent", description="BFV / BGV Exact Integer Homomorphic Encryption & Relinearization Agent")
@@ -83,7 +92,7 @@ def main(argv=None):
                 primary_metric=float(r.get("primary_metric", 15.0)),
                 secondary_metric=float(r.get("secondary_metric", 5.0)),
                 status_descriptor=r.get("status_descriptor", "NOMINAL"),
-                is_critical_flag=bool(r.get("is_critical_flag", False)),
+                is_critical_flag=parse_bool(r.get("is_critical_flag", "")),
             )
             dossier = coordinator.process(payload)
             row_dict = dict(r)
